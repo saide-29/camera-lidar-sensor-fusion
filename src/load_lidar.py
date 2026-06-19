@@ -18,3 +18,4 @@ pcd.points = o3d.utility.Vector3dVector(xyz)
 
 
 o3d.visualization.draw_geometries([pcd])
+
