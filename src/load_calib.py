@@ -28,6 +28,16 @@ for line in lines:
            print(Tr_velo_to_cam)
            print(Tr_velo_to_cam.shape)
 
+      if line.startswith("R0_rect:"):
+           
+           parts_rect = line.split()
+           values_rect = np.array(parts_rect[1:], dtype=float)
+
+           R0_rect = values_rect.reshape(3,3)
+
+           print(R0_rect)
+           print(R0_rect.shape)
+
 point = np.array([
       18.324,
       0.049,
