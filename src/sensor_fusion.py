@@ -1,5 +1,7 @@
 import numpy as np
 import cv2
+from load_lidar import load_lidar
+from load_calib import load_calibration
 
 image_path = "data/kitti/image_2/image_2/000000.png"
 
@@ -7,74 +9,57 @@ image = cv2.imread(image_path)
 
 print(image.shape)
 
-####
+
 
 lidar_path = "data/kitti/velodyne/velodyne/000000.bin"
 
-points = np.fromfile(
-    lidar_path,
-    dtype=np.float32
-)
+points = load_lidar(lidar_path)
 
-points = points.reshape(-1, 4)
 
-#####
 
 calib_path = "data/kitti/calib/calib/000000.txt"
 
-with open(calib_path, "r") as f:
-    lines = f.readlines()
+P2, R0_rect, Tr_velo_to_cam = load_calibration(calib_path)
 
+def project_points(points, P2, R0_rect, Tr_velo_to_cam):
 
-for line in lines:
+    xyz = points[:, :3]
+    N = xyz.shape[0] # all points
+    point_h = np.hstack([xyz, np.ones((N, 1))]) 
 
-    if line.startswith("P2:"):
-        P2 = np.array(
-            line.split()[1:],
-            dtype=float
-        ).reshape(3, 4)
+    R0_rect_h = np.eye(4) # I @ A = A 
+    R0_rect_h[:3,:3] = R0_rect
 
-    if line.startswith("Tr_velo_to_cam:"):
-        Tr_velo_to_cam = np.array(
-            line.split()[1:],
-            dtype=float
-        ).reshape(3, 4)
+    Tr_velo_to_cam_h = np.eye(4)
+    Tr_velo_to_cam_h[:3, :] = Tr_velo_to_cam
 
-    if line.startswith("R0_rect:"):
-        R0_rect = np.array(
-           line.split()[1:],
-           dtype=float
-        ).reshape(3,3)
+    camera_view = (Tr_velo_to_cam_h @ point_h.T).T
+    
+    front_mask = camera_view[:, 2] > 0
+    camera_view = camera_view[front_mask]
 
-R0_rect_h = np.eye(4) # I @ A = A 
-R0_rect_h[:3,:3] = R0_rect
+    camera_rect_h = (R0_rect_h @ camera_view.T).T
 
-Tr_velo_to_cam_h = np.eye(4)
-Tr_velo_to_cam_h[:3, :] = Tr_velo_to_cam
-
+    pixel_view = (P2 @ camera_rect_h.T).T
+    u = pixel_view[:, 0] / pixel_view[:, 2]#Perspective Projection
+    v = pixel_view[:, 1] / pixel_view[:, 2]
+    depth = camera_rect_h[:, 2] # camera depth (Z)
+ 
+    return u, v, depth
 
 print("LiDAR:", points.shape)
 print("P2:", P2.shape)
 print("Tr_velo_to_cam:", Tr_velo_to_cam.shape)
 
-####
-
-xyz = points[:, :3]
-N = xyz.shape[0] # all points
-point_h = np.hstack([xyz, np.ones((N, 1))])
-
-camera_view = (Tr_velo_to_cam_h @ point_h.T).T
-
-front_mask = camera_view[:, 2] > 0
-camera_view = camera_view[front_mask]
+u, v, depth = project_points(
+    points,
+    P2,
+    R0_rect,
+    Tr_velo_to_cam
+)
 
 
-camera_rect_h = (R0_rect_h @ camera_view.T).T
 
-pixel_view = (P2 @ camera_rect_h.T).T
-u = pixel_view[:, 0] / pixel_view[:, 2]
-v = pixel_view[:, 1] / pixel_view[:, 2]
-depth = camera_rect_h[:, 2] # z far away from camera
 
 img_mask = (u >= 0) & (u < image.shape[1]) & (v >= 0) & (v < image.shape[0])
 u = u[img_mask].astype(int)
