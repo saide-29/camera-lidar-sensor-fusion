@@ -41,10 +41,21 @@ def project_points(points, P2, R0_rect, Tr_velo_to_cam):
     camera_rect_h = (R0_rect_h @ camera_view.T).T
 
     pixel_view = (P2 @ camera_rect_h.T).T
+    deniminator = pixel_view[:, 2]
+    valid_mask = (deniminator  > 0) & np.isfinite(deniminator)
+    pixel_view = pixel_view[valid_mask]
+    camera_rect_h = camera_rect_h[valid_mask]
+    
     u = pixel_view[:, 0] / pixel_view[:, 2]#Perspective Projection
     v = pixel_view[:, 1] / pixel_view[:, 2]
+
     depth = camera_rect_h[:, 2] # camera depth (Z)
- 
+
+    finite_mask = np.isfinite(u) & np.isfinite(v) & np.isfinite(depth)
+    u = u[finite_mask]
+    v = v[finite_mask]
+    depth = depth[finite_mask]
+
     return u, v, depth
 
 print("LiDAR:", points.shape)
